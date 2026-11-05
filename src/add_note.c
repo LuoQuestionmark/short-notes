@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -5,6 +6,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
 static bool sanitize_string(const char *str) {
@@ -12,7 +14,8 @@ static bool sanitize_string(const char *str) {
     for (size_t i = 0; i < strlen(str); i++) {
         c = str[i];
         if (c == '-' || c == '_' || c == '.' || c == ' ') continue;
-        if (str[i] >= 'A' && str[i] <= 'z') continue;
+        if (c >= 'A' && c <= 'z') continue;
+        if (c >= '0' && c <= '9') continue;
 
         // otherwise unacceptable
         return false;
@@ -26,6 +29,58 @@ static bool is_suffix_txt(const char *str) {
     return !strncmp(str + (strlen(str) - 4), ".txt", 4);
 }
 
+static void remove_redundant_space(char *str) {
+    char temp[128]          = { 0 };
+    bool last_char_is_space = false;
+
+    for (int i = 0, j = 0; j < sizeof(temp); i++) {
+        if (str[i] == ' ') {
+            if (!last_char_is_space) {
+                last_char_is_space = true;
+            } else {
+                continue;
+            }
+        } else {
+            last_char_is_space = false;
+        }
+
+        temp[j++] = str[i];
+        if (str[i] == '\0') {
+            break;
+        }
+    }
+
+    memcpy(str, temp, strlen(temp) + 1);
+}
+
+static char **prepare_execv_command(const char *editor,
+                                    const char *title_buffer) {
+    char **execv_strs = calloc(4, sizeof(char *));
+
+    if (strncmp(editor, "vim", strlen("vim")) == 0) {
+        execv_strs[0] = strdup("vim");
+        execv_strs[1] = strdup("+$");
+        execv_strs[2] = strdup(title_buffer);
+    } else if (strncmp(editor, "vi", strlen("vi")) == 0) {
+        execv_strs[0] = strdup("vi");
+        execv_strs[1] = strdup("+$");
+        execv_strs[2] = strdup(title_buffer);
+    } else if (strncmp(editor, "nano", strlen("nano")) == 0) {
+        execv_strs[0] = strdup("nano");
+        execv_strs[1] = strdup("+999999");
+        execv_strs[2] = strdup(title_buffer);
+    } else if (strncmp(editor, "emacs", strlen("emacs")) == 0) {
+        execv_strs[0] = strdup("emacs");
+        execv_strs[1] = strdup("+999999");
+        execv_strs[2] = strdup(title_buffer);
+    } else {
+        execv_strs[0] = strdup(editor);
+        execv_strs[1] = strdup(title_buffer);
+    }
+
+    return execv_strs;
+}
+
 int add_note() {
     bool success = true;
 
@@ -35,8 +90,8 @@ int add_note() {
     size_t tags_len = 0;
     char *tags      = NULL;
 
-    char title_buffer[128]  = { 0 };
-    char editor_buffer[128] = { 0 };
+    char filename_buffer[128] = { 0 };
+    char editor_buffer[128]   = { 0 };
 
     // input title
     printf("title: ");
@@ -51,7 +106,7 @@ int add_note() {
     // check string
     if (!sanitize_string(title)) {
         char err_msg[128] = { 0 };
-        snprintf(err_msg, strlen(err_msg), "sanitize_string \"%s\"", title);
+        snprintf(err_msg, sizeof(err_msg) - 1, "sanitize_string \"%s\"", title);
         errno = EINVAL;
         perror(err_msg);
         success = false;
@@ -59,9 +114,18 @@ int add_note() {
     }
 
     // add .txt suffix
-    strncpy(title_buffer, title, sizeof(title_buffer) - 1);
+    strncpy(filename_buffer, title, sizeof(filename_buffer) - 1);
     if (!is_suffix_txt(title)) {
-        strcat(title_buffer, ".txt");
+        strcat(filename_buffer, ".txt");
+    }
+
+    // check if file exists
+    if (access(filename_buffer, F_OK) == 0) {
+        fprintf(stderr, "a file with the same title \"%s\" exists, stop\n",
+                filename_buffer);
+        perror("access");
+        success = false;
+        goto clean_buffers;
     }
 
     // input tag
@@ -73,6 +137,11 @@ int add_note() {
         goto clean_buffers;
     }
     tags[strlen(tags) - 1] = 0; // remove \n at the end
+    remove_redundant_space(tags);
+
+    // get datetime string
+    time_t current_time;
+    time(&current_time);
 
     printf("(press anykey to edit content)");
     getchar();
@@ -82,7 +151,7 @@ int add_note() {
     if ((editor = getenv("EDITOR")) != NULL) {
         strncpy(editor_buffer, editor, sizeof(editor_buffer) - 1);
     } else {
-        editor = "vi";
+        editor = "nano";
     }
 
     int pid;
@@ -91,16 +160,29 @@ int add_note() {
         // child
 
         // prepare file with tags
-        FILE *note = fopen(title_buffer, "a+");
+        FILE *note = fopen(filename_buffer, "a+");
         if (note == NULL) {
             exit(EXIT_FAILURE);
         }
+        fprintf(note, "title: %s\n", title);
         fprintf(note, "tags: %s\n", tags);
+        fprintf(note, "date: %s", ctime(&current_time));
+        fputs("----", note);
         fclose(note);
 
         // open editor
-        char *params[] = { editor, title_buffer, NULL };
+        char **params = prepare_execv_command(editor, filename_buffer);
         execvp(params[0], params);
+
+        // execvp fails, clean the string list allocated to exec command
+        perror("execvp");
+        for (int i = 0; i < 4; i++) {
+            if (params[i]) {
+                free(params[i]);
+            }
+        }
+        exit(EXIT_FAILURE);
+
     } else {
         // parent
         if (pid == -1) {
@@ -110,7 +192,7 @@ int add_note() {
         }
         wait(&child_status);
         if (WEXITSTATUS(child_status) == EXIT_SUCCESS) {
-            puts("note added");
+            printf("note added as %s\n", filename_buffer);
         }
     }
 
