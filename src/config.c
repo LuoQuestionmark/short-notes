@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 const char config_file_name[] = ".sn_config";
@@ -20,6 +21,7 @@ bool get_config_file(char *buffer, int buflen) {
 
     bool continue_backwards = false;
     bool found              = false;
+    ino_t last_ino          = 0;
 
     do {
         DIR *dir = opendir(current_dir);
@@ -27,12 +29,19 @@ bool get_config_file(char *buffer, int buflen) {
             perror("opendir");
             return NULL;
         }
+        continue_backwards = false;
 
         struct dirent *dirent = NULL;
         while ((dirent = readdir(dir)) != NULL) {
             if (strncmp(dirent->d_name, "..", sizeof("..")) == 0 &&
                 dirent->d_type == DT_DIR) {
-                continue_backwards = true;
+                // notice that for root dir, its parent is itself, so check the
+                // ino number until it loop
+                if (last_ino != dirent->d_ino) {
+                    last_ino           = dirent->d_ino;
+                    continue_backwards = true;
+                }
+                continue_backwards = false;
             }
 
             if (strncmp(dirent->d_name, config_file_name,

@@ -8,8 +8,18 @@
 #include <unistd.h>
 
 static void print_help() {
-    // TODO
-    puts("help msg");
+    puts("short_notes: a simple program to add and search short notes");
+    puts("usage:");
+    puts("\tshort_notes [add|a]:\tadd notes");
+    puts("\tshort_notes [search|s] keyword:\tsearch notes with keyword");
+    puts("\tshort_notes [search|s] --title kw:\tsearch notes with keyword in "
+         "title");
+    puts("\tshort_notes [search|s] --tag kw:\tsearch notes with keyword "
+         "in tag");
+    puts("\tshort_notes [search|s] --content kw:\tsearch notes with "
+         "keyword in content");
+    puts("\tshort_notes config set <dir>:\t set notes repository to the "
+         "given directory");
 }
 
 int main(int argc, char **argv) {
