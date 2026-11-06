@@ -56,7 +56,7 @@ static bool note_contains_title(const char *note, const char *title) {
 static bool note_contains_tag(const char *note, const char *tag) {
     char pattern[256] = { 0 };
     // tag should be separated by space
-    snprintf(pattern, sizeof(pattern) - 1, "tag:.* %s .*\n", tag);
+    snprintf(pattern, sizeof(pattern) - 1, "tags:.* %s[ \n].*", tag);
 
     regex_t preg;
     regcomp(&preg, pattern, REG_NOSUB | REG_NEWLINE);
@@ -119,17 +119,20 @@ void search_result_add_content(search_result_t *self, const char *content) {
     self->data[self->count++] = strdup(content);
 }
 
-void search_result_print(search_result_t *result) {
+void search_result_print(const search_result_t *result) {
     if (result == NULL) return;
 
-    if (result->count == 0) {
+    if (result->count - result->hidden == 0) {
         puts("no matched result");
         return;
     }
 
-    printf("total %d results found, listed here:\n", result->count);
+    printf("total %d results found, listed here:\n",
+           result->count - result->hidden);
 
     for (int i = 0; i < result->count; i++) {
+        if (result->data[i] == NULL) continue;
+
         puts("--------");
         puts(result->data[i]);
     }
@@ -192,7 +195,34 @@ free_dir:
     return 0;
 }
 
-int search_filter(const short search_type, const char *keyword,
+int search_filter(enum SN_SEARCH_RANGE option, const char *keyword,
                   search_result_t *result) {
+    bool (*predicate)(const char *note, const char *keyword);
+
+    switch (option) {
+    case SN_SEARCH_TITLE:
+        predicate = note_contains_title;
+        break;
+    case SN_SEARCH_TAG:
+        predicate = note_contains_tag;
+        break;
+    case SN_SEARCH_CONTENT:
+        predicate = note_contains_content;
+        break;
+    case SN_SEARCH_ALL:
+        return 0; // no filterage
+    }
+
+    for (int i = 0; i < result->count; i++) {
+        if (predicate(result->data[i], keyword) == false) {
+            // predicate is false; search result does not match
+            result->hidden += 1;
+            free(result->data[i]);
+
+            // need to set this datum to NULL to prevend double free
+            result->data[i] = NULL;
+        }
+    }
+
     return 0;
 }
