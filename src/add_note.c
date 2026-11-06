@@ -1,3 +1,4 @@
+#include "config.h"
 #include <assert.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -93,6 +94,11 @@ int add_note() {
     char filename_buffer[128] = { 0 };
     char editor_buffer[128]   = { 0 };
 
+    // add repo dir if available
+    if (get_note_repo(filename_buffer, sizeof(filename_buffer)) == false) {
+        puts("no config file found, save file locally");
+    }
+
     // input title
     printf("title: ");
     getline(&title, &title_len, stdin);
@@ -114,7 +120,8 @@ int add_note() {
     }
 
     // add .txt suffix
-    strncpy(filename_buffer, title, sizeof(filename_buffer) - 1);
+    strncat(filename_buffer, title,
+            sizeof(filename_buffer) - strlen(filename_buffer) - 1);
     if (!is_suffix_txt(title)) {
         strcat(filename_buffer, ".txt");
     }
