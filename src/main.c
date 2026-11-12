@@ -20,14 +20,16 @@ static void print_help() {
          "keyword in content");
     puts("\tshort_notes config set <dir>:\t set notes repository to the "
          "given directory");
+    puts("\tshort_notes dir <dir>:\t print notes repository");
 }
 
 int main(int argc, char **argv) {
     int opt;
 
-    bool adding_note    = false;
-    bool searching_note = false;
-    bool config_repo    = false;
+    bool adding_note      = false;
+    bool searching_note   = false;
+    bool config_repo      = false;
+    bool display_repo_dir = false;
 
     char searching_str[256] = { 0 };
     int searching_flag      = 0;
@@ -64,9 +66,12 @@ int main(int argc, char **argv) {
     if (strncmp(argv[1], "c", sizeof("c")) == 0) {
         config_repo = true;
     }
-    // postcondition: adding_note && searching_note = false
 
-    if (!adding_note && !searching_note && !config_repo) {
+    if (strncmp(argv[1], "dir", sizeof("dir")) == 0) {
+        display_repo_dir = true;
+    }
+
+    if (!adding_note && !searching_note && !config_repo && !display_repo_dir) {
         fprintf(stderr, "unrecognized option %s\n", argv[1]);
         exit(EXIT_FAILURE);
     }
@@ -136,6 +141,16 @@ int main(int argc, char **argv) {
     if (config_repo) {
         if (set_note_repo(argv[3]) == false) {
             fprintf(stderr, "cannot set note repo at %s\n", argv[3]);
+            exit(EXIT_FAILURE);
+        }
+    }
+    if (display_repo_dir) {
+        char repo_dir[512] = { 0 };
+        if (get_note_repo(repo_dir, sizeof(repo_dir))) {
+            puts(repo_dir);
+            exit(EXIT_SUCCESS);
+        } else {
+            fputs("no repo configuration found", stderr);
             exit(EXIT_FAILURE);
         }
     }

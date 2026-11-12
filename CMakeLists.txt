@@ -12,4 +12,7 @@ add_executable(short_notes
 )
 target_include_directories(short_notes PRIVATE include)
 
-install(TARGETS short_notes)
+install(
+    TARGETS short_notes
+    CONFIGURATIONS Release
+)
