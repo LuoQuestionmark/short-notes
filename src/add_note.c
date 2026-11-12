@@ -97,6 +97,10 @@ int add_note() {
     // add repo dir if available
     if (get_note_repo(filename_buffer, sizeof(filename_buffer)) == false) {
         puts("no config file found, save file locally");
+    } else {
+        // add a path separator
+        strncat(filename_buffer, "/",
+                sizeof(filename_buffer) - strlen(filename_buffer) - 1);
     }
 
     // input title

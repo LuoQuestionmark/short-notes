@@ -40,8 +40,9 @@ bool get_config_file(char *buffer, int buflen) {
                 if (last_ino != dirent->d_ino) {
                     last_ino           = dirent->d_ino;
                     continue_backwards = true;
+                } else {
+                    continue_backwards = false;
                 }
-                continue_backwards = false;
             }
 
             if (strncmp(dirent->d_name, config_file_name,

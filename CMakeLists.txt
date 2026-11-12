@@ -11,3 +11,5 @@ add_executable(short_notes
     src/config.c
 )
 target_include_directories(short_notes PRIVATE include)
+
+install(TARGETS short_notes)
